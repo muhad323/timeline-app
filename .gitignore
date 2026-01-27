@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Next.js
+.next/
+**/ .next/
+
+# Production
+build/
+dist/
+**/build/
+**/dist/
+
+# Env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+**/.env*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+**/logs/
+
+# Optional: TypeScript
+*.tsbuildinfo
+next-env.d.ts

@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://timeline-backend-ldg3.onrender.com';
 
 export const api = {
     getToken: () => localStorage.getItem('timeline_token'),
@@ -16,7 +16,7 @@ export const api = {
             ...options.headers,
         };
 
-        const response = await fetch(`${API_URL}${endpoint}`, {
+        const response = await fetch(`${API_URL}/api${endpoint}`, {
             ...options,
             headers,
         });

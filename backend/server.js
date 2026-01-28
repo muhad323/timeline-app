@@ -25,7 +25,8 @@ connectDB();
 // -----------------------------
 const allowedOrigins = [
     "http://localhost:3000",
-    "https://timeline-app-five.vercel.app"
+    "https://timeline-app-five.vercel.app",
+    "https://mimar-timeline.vercel.app"
 ];
 
 app.use(cors({

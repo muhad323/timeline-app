@@ -21,7 +21,7 @@ const PORT = process.env.PORT || 5001;
 connectDB();
 
 // -----------------------------
-// CORS CONFIG (FINAL WORKING VERSION)
+// CORS CONFIG (Express 5 safe)
 // -----------------------------
 const allowedOrigins = [
     "http://localhost:3000",
@@ -40,9 +40,6 @@ app.use(cors({
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true
 }));
-
-// FIX: Express 5 does NOT allow "*" wildcard
-app.options("/api/*", cors());
 
 
 // -----------------------------

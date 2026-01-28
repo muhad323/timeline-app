@@ -20,18 +20,31 @@ const PORT = process.env.PORT || 5001;
 // Connect to Database
 connectDB();
 
-// Middleware
-const cors = require("cors");
+// -----------------------------
+// CORS CONFIG (FINAL WORKING VERSION)
+// -----------------------------
+const allowedOrigins = [
+    "http://localhost:3000",
+    "https://timeline-app-five.vercel.app"
+];
 
 app.use(cors({
-    origin: [
-        "http://localhost:3000",
-        "https://timeline-app-five.vercel.app"   // your Vercel frontend domain
-    ],
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error("CORS blocked: " + origin));
+        }
+    },
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true
 }));
+
+// Allow all OPTIONS preflight requests
+app.options("*", cors());
+
+// -----------------------------
 
 app.use(express.json());
 
@@ -41,7 +54,7 @@ app.use('/api/projects', projectRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
-    res.json({ status: 'ok', message: 'MIMAR MODELS API is running' });
+    res.json({ status: 'ok', message: 'Timeline API is running' });
 });
 
 // Error handling middleware

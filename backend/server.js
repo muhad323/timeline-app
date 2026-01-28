@@ -41,8 +41,9 @@ app.use(cors({
     credentials: true
 }));
 
-// Allow all OPTIONS preflight requests
-app.options("*", cors());
+// FIX: Express 5 does NOT allow "*" wildcard
+app.options("/api/*", cors());
+
 
 // -----------------------------
 

@@ -21,13 +21,18 @@ const PORT = process.env.PORT || 5001;
 connectDB();
 
 // Middleware
+const cors = require("cors");
+
 app.use(cors({
     origin: [
         "http://localhost:3000",
-        "https://your-vercel-domain.vercel.app"
+        "https://timeline-app-five.vercel.app"   // your Vercel frontend domain
     ],
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true
 }));
+
 app.use(express.json());
 
 // Routes

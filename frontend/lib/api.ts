@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:5001/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
 
 export const api = {
     getToken: () => localStorage.getItem('timeline_token'),

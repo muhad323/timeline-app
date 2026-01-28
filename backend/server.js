@@ -5,6 +5,15 @@ const connectDB = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
 const projectRoutes = require('./routes/projectRoutes');
 
+// Validate environment variables
+const requiredEnvVars = ['MONGO_URI', 'JWT_SECRET'];
+const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
+
+if (missingEnvVars.length > 0) {
+    console.error(`Error: Missing environment variables: ${missingEnvVars.join(', ')}`);
+    process.exit(1);
+}
+
 const app = express();
 const PORT = process.env.PORT || 5001;
 

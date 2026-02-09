@@ -17,7 +17,6 @@ import {
   Flag,
   AlertTriangle,
   Printer,
-  FolderOpen,
   ChevronDown,
   Coffee,
 } from "lucide-react"
@@ -34,12 +33,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import {
   Select,
   SelectContent,
@@ -144,6 +137,12 @@ function getMilestoneColor(type: Milestone["type"]): string {
   }
 }
 
+function normalizeDate(date: Date): Date {
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
 // Export types for use in other components
 export type { ProjectData, Task, Milestone }
 export { createDefaultProject, TASK_COLORS }
@@ -160,6 +159,7 @@ export function ProjectTimeline({ initialProject, onBack, onUpdateProject }: Pro
   const [selectedTask, setSelectedTask] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(!initialProject)
   const [currentDate, setCurrentDate] = useState(new Date())
+  const [isPrinting, setIsPrinting] = useState(false)
 
   // Modal states
   const [showTaskModal, setShowTaskModal] = useState(false)
@@ -194,12 +194,26 @@ export function ProjectTimeline({ initialProject, onBack, onUpdateProject }: Pro
     return () => clearInterval(interval)
   }, [])
 
+  // Handle print events (Ctrl+P support)
+  useEffect(() => {
+    const handleBeforePrint = () => {
+      setIsPrinting(true)
+    }
+    const handleAfterPrint = () => {
+      setIsPrinting(false)
+    }
+    window.addEventListener("beforeprint", handleBeforePrint)
+    window.addEventListener("afterprint", handleAfterPrint)
+    return () => {
+      window.removeEventListener("beforeprint", handleBeforePrint)
+      window.removeEventListener("afterprint", handleAfterPrint)
+    }
+  }, [])
+
   // Calculate days elapsed from start date to current system date
   const daysElapsed = useMemo(() => {
-    const start = new Date(project.startDate)
-    start.setHours(0, 0, 0, 0)
-    const now = new Date(currentDate)
-    now.setHours(0, 0, 0, 0)
+    const start = normalizeDate(project.startDate)
+    const now = normalizeDate(currentDate)
     const diffTime = now.getTime() - start.getTime()
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
     return diffDays
@@ -210,15 +224,50 @@ export function ProjectTimeline({ initialProject, onBack, onUpdateProject }: Pro
     return Math.max(0, daysElapsed)
   }, [daysElapsed])
 
-  // Dynamic timeline - extends based on elapsed days, minimum 45 days view
-  const totalDays = Math.max(45, daysElapsed + 14)
+  // Dynamic timeline - extends based on elapsed days, minimum 365 days view to support long projects
+  const totalDays = Math.max(365, daysElapsed + 60)
   const visibleDays = 21
 
   const dates = useMemo(() => {
     return Array.from({ length: totalDays }, (_, i) => addDays(project.startDate, i))
   }, [project.startDate, totalDays])
 
-  const visibleDates = dates.slice(viewStartDay, viewStartDay + visibleDays)
+  const printDates = useMemo(() => {
+    // Calculate the absolute last day of any activity
+    let maxDay = 0
+
+    // Check all tasks for marked days
+    project.tasks.forEach((t) => {
+      if (t.markedDays.length > 0) {
+        const taskMax = Math.max(...t.markedDays)
+        if (taskMax > maxDay) maxDay = taskMax
+      }
+      // Also consider deadlines
+      if (t.deadline && t.deadline > maxDay) maxDay = t.deadline
+    })
+
+    // Check milestones
+    if (project.milestones.length > 0) {
+      const milestoneMax = Math.max(...project.milestones.map(m => m.day))
+      if (milestoneMax > maxDay) maxDay = milestoneMax
+    }
+
+    // Check holidays
+    if (project.holidays.length > 0) {
+      const holidayMax = Math.max(...project.holidays)
+      if (holidayMax > maxDay) maxDay = holidayMax
+    }
+
+    // Ensure we cover at least "today" if the project is ongoing
+    if (daysElapsed > maxDay) maxDay = daysElapsed
+
+    // Add a small buffer of 7 days
+    const endDay = maxDay + 7
+
+    return Array.from({ length: endDay + 1 }, (_, i) => addDays(project.startDate, i))
+  }, [project, daysElapsed])
+
+  const datesToShow = dates.slice(viewStartDay, viewStartDay + visibleDays)
 
   const scrollTimeline = (direction: "left" | "right") => {
     setViewStartDay((prev) => {
@@ -307,8 +356,13 @@ export function ProjectTimeline({ initialProject, onBack, onUpdateProject }: Pro
   // Add milestone
   const addMilestone = () => {
     if (!newMilestoneLabel.trim() || !newMilestoneDay) return
+
+    // Normalize dates to prevent timezone issues
+    const normalizedMilestoneDay = normalizeDate(newMilestoneDay)
+    const normalizedStart = normalizeDate(project.startDate)
+
     const dayIndex = Math.floor(
-      (newMilestoneDay.getTime() - project.startDate.getTime()) / (1000 * 60 * 60 * 24)
+      (normalizedMilestoneDay.getTime() - normalizedStart.getTime()) / (1000 * 60 * 60 * 24)
     )
     const newMilestone: Milestone = {
       id: crypto.randomUUID(),
@@ -330,7 +384,17 @@ export function ProjectTimeline({ initialProject, onBack, onUpdateProject }: Pro
 
   // Print timeline
   const handlePrint = () => {
-    window.print()
+    setIsPrinting(true)
+    const originalTitle = document.title
+    if (project.name) {
+      document.title = project.name
+    }
+
+    setTimeout(() => {
+      window.print()
+      document.title = originalTitle
+      setIsPrinting(false)
+    }, 1000)
   }
 
   // Check deadline alerts
@@ -351,6 +415,19 @@ export function ProjectTimeline({ initialProject, onBack, onUpdateProject }: Pro
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-6 print:p-2 print:bg-white">
+      {/* Print Styles */}
+      <style type="text/css" media="print">
+        {`
+          @page { size: landscape; margin: 1cm; }
+          body, html {
+            width: fit-content !important;
+            min-width: 100% !important;
+            overflow: visible !important;
+          }
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        `}
+      </style>
+
       {/* Project Setup Modal */}
       {showSettings && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm print:hidden">
@@ -677,8 +754,12 @@ export function ProjectTimeline({ initialProject, onBack, onUpdateProject }: Pro
               <Button
                 onClick={() => {
                   if (!newHolidayDate) return
+                  // Normalize dates to prevent timezone issues
+                  const normalizedHolidayDate = normalizeDate(newHolidayDate)
+                  const normalizedStart = normalizeDate(project.startDate)
+
                   const dayIndex = Math.floor(
-                    (newHolidayDate.getTime() - project.startDate.getTime()) / (1000 * 60 * 60 * 24)
+                    (normalizedHolidayDate.getTime() - normalizedStart.getTime()) / (1000 * 60 * 60 * 24)
                   )
                   if (!project.holidays.includes(dayIndex)) {
                     updateProject({ holidays: [...project.holidays, dayIndex].sort((a, b) => a - b) })
@@ -731,7 +812,7 @@ export function ProjectTimeline({ initialProject, onBack, onUpdateProject }: Pro
           Previous
         </Button>
         <div className="text-sm text-muted-foreground">
-          {formatDate(visibleDates[0])} - {formatDate(visibleDates[visibleDates.length - 1])}
+          {formatDate(datesToShow[0])} - {formatDate(datesToShow[datesToShow.length - 1])}
         </div>
         <Button
           variant="outline"
@@ -745,19 +826,19 @@ export function ProjectTimeline({ initialProject, onBack, onUpdateProject }: Pro
         </Button>
       </div>
 
-      {/* Main Timeline Grid Container */}
-      <div className="rounded-xl bg-card shadow-lg print:rounded-none print:shadow-none print:border overflow-hidden">
+      {/* Main Timeline Grid Container (Screen View) */}
+      <div className="rounded-xl bg-card shadow-lg overflow-hidden hide-on-print">
         <div ref={timelineRef} className="overflow-x-auto">
           <div className="min-w-[1000px] md:min-w-full">
             {/* Date Header */}
             <div
               className="grid border-b border-border"
-              style={{ gridTemplateColumns: `200px repeat(${visibleDays}, 1fr)` }}
+              style={{ gridTemplateColumns: `300px repeat(${datesToShow.length}, minmax(40px, 1fr))` }}
             >
               <div className="border-r border-border bg-secondary px-3 py-2 text-sm font-medium text-secondary-foreground">
                 Task
               </div>
-              {visibleDates.map((date, index) => {
+              {datesToShow.map((date, index) => {
                 const sunday = isSunday(date)
                 const actualDayIndex = viewStartDay + index
                 const isToday = actualDayIndex === todayIndex && daysElapsed >= 0
@@ -831,7 +912,7 @@ export function ProjectTimeline({ initialProject, onBack, onUpdateProject }: Pro
                     "grid border-b border-border transition-colors",
                     selectedTask === task.id ? "bg-primary/5" : "hover:bg-muted/30"
                   )}
-                  style={{ gridTemplateColumns: `200px repeat(${visibleDays}, 1fr)` }}
+                  style={{ gridTemplateColumns: `300px repeat(${datesToShow.length}, minmax(40px, 1fr))` }}
                 >
                   {/* Task Name Cell */}
                   <div
@@ -875,7 +956,8 @@ export function ProjectTimeline({ initialProject, onBack, onUpdateProject }: Pro
                   </div>
 
                   {/* Timeline Cells */}
-                  {visibleDates.map((date, dayIndex) => {
+                  {datesToShow.map((date, dayIndex) => {
+                    // When viewing, we start from viewStartDay
                     const actualDayIndex = viewStartDay + dayIndex
                     const isMarked = task.markedDays.includes(actualDayIndex)
                     const sunday = isSunday(date)
@@ -929,14 +1011,14 @@ export function ProjectTimeline({ initialProject, onBack, onUpdateProject }: Pro
             {/* Milestones Row */}
             {project.milestones.length > 0 && (
               <div
-                className="grid bg-secondary/30"
-                style={{ gridTemplateColumns: `200px repeat(${visibleDays}, 1fr)` }}
+                className="grid border-b border-border"
+                style={{ gridTemplateColumns: `300px repeat(${datesToShow.length}, minmax(40px, 1fr))` }}
               >
                 <div className="flex items-center gap-2 border-r border-border px-3 py-2">
                   <Flag className="h-4 w-4 text-primary" />
                   <span className="text-xs font-medium text-muted-foreground">Milestones</span>
                 </div>
-                {visibleDates.map((_, dayIndex) => {
+                {datesToShow.map((_, dayIndex) => {
                   const actualDayIndex = viewStartDay + dayIndex
                   const milestone = project.milestones.find((m) => m.day === actualDayIndex)
 
@@ -948,6 +1030,163 @@ export function ProjectTimeline({ initialProject, onBack, onUpdateProject }: Pro
                             className={cn("h-3 w-3 rounded-full cursor-pointer", getMilestoneColor(milestone.type))}
                             title={milestone.label}
                             onClick={() => deleteMilestone(milestone.id)}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Print Timeline Grid Container (Always rendered but hidden on screen) */}
+      <div className="show-on-print border border-black/20 overflow-visible w-full bg-white text-black" style={{ maxWidth: 'none', width: 'auto' }}>
+        <div className="w-full">
+          <div className="w-full table-fixed" style={{ width: "max-content", minWidth: "100%" }}>
+            {/* Date Header */}
+            <div
+              className="grid border-b border-black/20"
+              style={{ gridTemplateColumns: `250px repeat(${printDates.length}, minmax(30px, 1fr))` }}
+            >
+              <div className="border-r border-black/20 px-2 py-2 text-sm font-bold text-black bg-gray-100 print:bg-gray-100">
+                Task
+              </div>
+              {printDates.map((date, index) => {
+                const sunday = isSunday(date)
+                const actualDayIndex = index // Starts from 0 for printDates
+                const isToday = actualDayIndex === todayIndex && daysElapsed >= 0
+                const milestone = project.milestones.find((m) => m.day === actualDayIndex)
+                const isHoliday = project.holidays.includes(actualDayIndex)
+                return (
+                  <div
+                    key={index}
+                    className={cn(
+                      "relative border-r border-black/20 px-1 py-2 text-center text-xs break-inside-avoid",
+                      sunday ? "bg-gray-100" : "bg-white",
+                      isHoliday && "bg-gray-100"
+                    )}
+                  >
+                    {isToday && (
+                      <div className="absolute -top-1 left-1/2 z-10 -translate-x-1/2 rounded bg-black px-1 text-[8px] font-bold text-white">
+                        TODAY
+                      </div>
+                    )}
+                    {milestone && (
+                      <div
+                        className={cn(
+                          "absolute -bottom-1 left-1/2 z-10 -translate-x-1/2 h-2 w-2 rounded-full border border-black/50",
+                          getMilestoneColor(milestone.type)
+                        )}
+                      />
+                    )}
+                    <div className="font-bold text-black">
+                      {date.getDate()}
+                    </div>
+                    <div className="text-[10px] text-gray-600">
+                      {getDayName(date)}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Task Rows */}
+            {project.tasks.map((task) => {
+              const taskColor = getTaskColor(task.color)
+              const deadlineStatus = getDeadlineStatus(task)
+
+              return (
+                <div
+                  key={task.id}
+                  className="grid border-b border-black/20 break-inside-avoid page-break-inside-avoid"
+                  style={{ gridTemplateColumns: `250px repeat(${printDates.length}, minmax(30px, 1fr))` }}
+                >
+                  {/* Task Name Cell */}
+                  <div className="flex items-center gap-2 border-r border-black/20 px-2 py-2">
+                    <div className={cn("h-3 w-3 rounded-full shrink-0 border border-black/20", taskColor.bg)} />
+                    <span className="text-sm font-medium text-black truncate flex-1">{task.name}</span>
+                    {deadlineStatus && (
+                      <span className="text-xs font-bold text-red-600">
+                        {deadlineStatus === 'overdue' ? '!' : '⚠️'}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Timeline Cells */}
+                  {printDates.map((date, dayIndex) => {
+                    const actualDayIndex = dayIndex
+                    const isMarked = task.markedDays.includes(actualDayIndex)
+                    const sunday = isSunday(date)
+                    const isToday = actualDayIndex === todayIndex && daysElapsed >= 0
+                    const isDeadline = task.deadline === actualDayIndex
+
+                    const isPrevMarked = task.markedDays.includes(actualDayIndex - 1)
+                    const isNextMarked = task.markedDays.includes(actualDayIndex + 1)
+                    const isHoliday = project.holidays.includes(actualDayIndex)
+
+                    return (
+                      <div
+                        key={dayIndex}
+                        className={cn(
+                          "relative border-r border-black/20 py-2 overflow-hidden",
+                          sunday ? "bg-gray-50" : "",
+                          isToday && "bg-gray-100",
+                          isHoliday && "bg-gray-100"
+                        )}
+                      >
+                        {isHoliday && (
+                          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
+                            <div className="text-[8px] font-bold text-gray-500 tracking-widest opacity-60">
+                              HOLIDAY
+                            </div>
+                          </div>
+                        )}
+                        {isMarked && !isHoliday && (
+                          <div
+                            className={cn(
+                              "absolute top-1/2 h-5 -translate-y-1/2 border border-black/10 print-color-exact",
+                              taskColor.bg,
+                              !isPrevMarked ? "left-1 rounded-l-md" : "left-0",
+                              !isNextMarked ? "right-1 rounded-r-md" : "right-0"
+                            )}
+                            style={{ backgroundColor: taskColor.bg.replace('bg-', '') }} // Fallback for print color
+                          />
+                        )}
+                        {isDeadline && (
+                          <div className="absolute bottom-1 left-1/2 -translate-x-1/2">
+                            <Flag className="h-3 w-3 text-red-600" />
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
+
+            {/* Milestones Row */}
+            {project.milestones.length > 0 && (
+              <div
+                className="grid border-b border-border"
+                style={{ gridTemplateColumns: `250px repeat(${printDates.length}, minmax(30px, 1fr))` }}
+              >
+                <div className="flex items-center gap-2 border-r border-black/20 px-2 py-2">
+                  <Flag className="h-4 w-4 text-black" />
+                  <span className="text-xs font-medium text-black">Milestones</span>
+                </div>
+                {printDates.map((_, dayIndex) => {
+                  const actualDayIndex = dayIndex
+                  const milestone = project.milestones.find((m) => m.day === actualDayIndex)
+
+                  return (
+                    <div key={dayIndex} className="relative border-r border-black/20 py-2">
+                      {milestone && (
+                        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
+                          <div
+                            className={cn("h-3 w-3 rounded-full border border-black/50", getMilestoneColor(milestone.type))}
                           />
                         </div>
                       )}
@@ -1162,17 +1401,24 @@ export function ProjectTimeline({ initialProject, onBack, onUpdateProject }: Pro
       </Dialog>
 
       {/* Print Styles */}
-      <style jsx global>{`
-        @media print {
-          body {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
+      <style type="text/css" media="print">
+        {`
+          @page { size: landscape; margin: 1cm; }
+          body, html {
+            width: fit-content !important;
+            min-width: 100% !important;
+            overflow: visible !important;
           }
-          .print\\:hidden {
-            display: none !important;
-          }
-        }
-      `}</style>
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          .hide-on-print { display: none !important; }
+          .show-on-print { display: block !important; }
+        `}
+      </style>
+      <style type="text/css">
+        {`
+          .show-on-print { display: none; }
+        `}
+      </style>
     </div>
   )
 }

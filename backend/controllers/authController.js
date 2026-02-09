@@ -1,110 +1,87 @@
-const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const jwt = require('jsonwebtoken');
 
-// Password Validation Helper
-const isStrongPassword = (password) => {
-    const minLength = 8;
-    const hasUpperCase = /[A-Z]/.test(password);
-    const hasLowerCase = /[a-z]/.test(password);
-    const hasNumbers = /\d/.test(password);
-    const hasSymbols = /[!@#$%^&*(),.?":{}|<>]/.test(password);
-    return password.length >= minLength && hasUpperCase && hasLowerCase && hasNumbers && hasSymbols;
+// Generate JWT
+const generateToken = (id) => {
+    return jwt.sign({ id }, process.env.JWT_SECRET, {
+        expiresIn: '30d',
+    });
 };
 
-// @desc    Register new user
-exports.register = async (req, res) => {
+// @desc    Register a new user
+// @route   POST /api/auth/register
+// @access  Public
+const registerUser = async (req, res) => {
     try {
-        const { username, password, securityQuestion, securityAnswer } = req.body;
+        const { name, email, password } = req.body;
 
-        if (!username || !password || !securityQuestion || !securityAnswer) {
-            return res.status(400).json({ message: 'All fields are required' });
+        if (!name || !email || !password) {
+            return res.status(400).json({ message: 'Please add all fields' });
         }
 
-        if (!isStrongPassword(password)) {
-            return res.status(400).json({
-                message: 'Password must be at least 8 characters long and contain uppercase, lowercase, numbers, and symbols.'
-            });
-        }
+        // Check if user exists
+        const userExists = await User.findOne({ email });
 
-        let user = await User.findOne({ username });
-        if (user) {
+        if (userExists) {
             return res.status(400).json({ message: 'User already exists' });
         }
 
-        user = new User({ username, password, securityQuestion, securityAnswer });
-        await user.save();
+        // Create user
+        const user = await User.create({
+            name,
+            email,
+            password,
+        });
 
-        const token = jwt.sign({ userId: user._id, username: user.username }, process.env.JWT_SECRET, { expiresIn: '7d' });
-        res.status(201).json({ token, userId: user._id, username: user.username });
-    } catch (error) {
-        res.status(500).json({ message: 'Error creating user', error: error.message });
-    }
-};
-
-// @desc    Login
-exports.login = async (req, res) => {
-    try {
-        const { username, password } = req.body;
-        const user = await User.findOne({ username });
-        if (!user) return res.status(401).json({ message: 'Invalid credentials' });
-
-        const isMatch = await user.comparePassword(password);
-        if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
-
-        const token = jwt.sign({ userId: user._id, username: user.username }, process.env.JWT_SECRET, { expiresIn: '7d' });
-        res.json({ token, userId: user._id, username: user.username });
-    } catch (error) {
-        res.status(500).json({ message: 'Server error', error: error.message });
-    }
-};
-
-// @desc    Step 1: Get security question for username
-exports.getSecurityQuestion = async (req, res) => {
-    try {
-        const user = await User.findOne({ username: req.params.username });
-        if (!user) return res.status(404).json({ message: 'Username not found' });
-        res.json({ securityQuestion: user.securityQuestion });
-    } catch (error) {
-        res.status(500).json({ message: 'Server error', error: error.message });
-    }
-};
-
-// @desc    Step 2: Verify security answer
-exports.verifySecurityAnswer = async (req, res) => {
-    try {
-        const { username, securityAnswer } = req.body;
-        const user = await User.findOne({ username });
-        if (!user) return res.status(404).json({ message: 'User not found' });
-
-        const isMatch = await user.compareSecurityAnswer(securityAnswer);
-        if (!isMatch) return res.status(401).json({ message: 'Incorrect security answer' });
-
-        res.json({ message: 'Answer verified' });
-    } catch (error) {
-        res.status(500).json({ message: 'Server error', error: error.message });
-    }
-};
-
-// @desc    Step 3: Reset Password
-exports.resetPassword = async (req, res) => {
-    try {
-        const { username, securityAnswer, newPassword } = req.body;
-
-        if (!isStrongPassword(newPassword)) {
-            return res.status(400).json({ message: 'New password does not meet strength requirements.' });
+        if (user) {
+            res.status(201).json({
+                _id: user.id,
+                name: user.name,
+                email: user.email,
+                token: generateToken(user.id),
+            });
+        } else {
+            res.status(400).json({ message: 'Invalid user data' });
         }
-
-        const user = await User.findOne({ username });
-        if (!user) return res.status(404).json({ message: 'User not found' });
-
-        const isMatch = await user.compareSecurityAnswer(securityAnswer);
-        if (!isMatch) return res.status(401).json({ message: 'Security verification failed' });
-
-        user.password = newPassword;
-        await user.save();
-
-        res.json({ message: 'Password updated successfully' });
     } catch (error) {
-        res.status(500).json({ message: 'Server error', error: error.message });
+        res.status(500).json({ message: error.message });
     }
+};
+
+// @desc    Authenticate a user
+// @route   POST /api/auth/login
+// @access  Public
+const loginUser = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        // Check for user email
+        const user = await User.findOne({ email });
+
+        if (user && (await user.matchPassword(password))) {
+            res.json({
+                _id: user.id,
+                name: user.name,
+                email: user.email,
+                token: generateToken(user.id),
+            });
+        } else {
+            res.status(401).json({ message: 'Invalid credentials' });
+        }
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Get user data
+// @route   GET /api/auth/me
+// @access  Private
+const getMe = async (req, res) => {
+    res.status(200).json(req.user);
+};
+
+module.exports = {
+    registerUser,
+    loginUser,
+    getMe,
 };

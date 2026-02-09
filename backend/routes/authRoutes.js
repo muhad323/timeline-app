@@ -1,17 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const {
-    register,
-    login,
-    resetPassword,
-    getSecurityQuestion,
-    verifySecurityAnswer
-} = require('../controllers/authController');
+const { registerUser, loginUser, getMe } = require('../controllers/authController');
 
-router.post('/register', register);
-router.post('/login', login);
-router.get('/security-question/:username', getSecurityQuestion);
-router.post('/verify-answer', verifySecurityAnswer);
-router.post('/reset-password', resetPassword);
+router.post('/register', registerUser);
+router.post('/login', loginUser);
+// router.get('/me', protect, getMe); // middleware needs to be created for protect
 
 module.exports = router;

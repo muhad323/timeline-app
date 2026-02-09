@@ -1045,7 +1045,54 @@ export function ProjectTimeline({ initialProject, onBack, onUpdateProject }: Pro
       {/* Print Timeline Grid Container (Always rendered but hidden on screen) */}
       <div className="show-on-print border border-black/20 overflow-visible w-full bg-white text-black" style={{ maxWidth: 'none', width: 'auto' }}>
         <div className="w-full">
-          <div className="w-full table-fixed" style={{ width: "max-content", minWidth: "100%" }}>
+          <div className="w-full table-fixed relative" style={{ width: "max-content", minWidth: "100%" }}>
+            {/* Month Header */}
+            <div
+              className="grid border-b border-black/20"
+              style={{ gridTemplateColumns: `250px repeat(${printDates.length}, minmax(30px, 1fr))` }}
+            >
+              <div className="border-r border-black/20 px-2 py-2 text-sm font-bold text-black bg-white">
+                Month
+              </div>
+              {(() => {
+                const spans: { name: string; year: number; span: number }[] = []
+                let currentMonth = -1
+                let currentSpan = 0
+                let currentName = ""
+                let currentYear = 0
+
+                printDates.forEach((date) => {
+                  const month = date.getMonth()
+                  const year = date.getFullYear()
+                  const name = date.toLocaleDateString("en-US", { month: "long" })
+
+                  if (month !== currentMonth) {
+                    if (currentSpan > 0) {
+                      spans.push({ name: currentName, year: currentYear, span: currentSpan })
+                    }
+                    currentMonth = month
+                    currentSpan = 1
+                    currentName = name
+                    currentYear = year
+                  } else {
+                    currentSpan++
+                  }
+                })
+                if (currentSpan > 0) {
+                  spans.push({ name: currentName, year: currentYear, span: currentSpan })
+                }
+                return spans.map((month, index) => (
+                  <div
+                    key={index}
+                    className="border-r border-black/20 px-2 py-1 text-center text-xs font-bold bg-gray-50 flex items-center justify-center"
+                    style={{ gridColumn: `span ${month.span}` }}
+                  >
+                    {month.name} {month.year}
+                  </div>
+                ))
+              })()}
+            </div>
+
             {/* Date Header */}
             <div
               className="grid border-b border-black/20"
@@ -1066,14 +1113,10 @@ export function ProjectTimeline({ initialProject, onBack, onUpdateProject }: Pro
                     className={cn(
                       "relative border-r border-black/20 px-1 py-2 text-center text-xs break-inside-avoid",
                       sunday ? "bg-gray-100" : "bg-white",
-                      isHoliday && "bg-gray-100"
+                      isHoliday && "bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNCIgaGVpZ2h0PSI0IiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxwYXRoIGQ9Ik0xIDNMMyAxTTEgNUw1IDEiIHN0cm9rZT0iI2QxZDVEQiIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9zdmc+')] bg-repeat"
                     )}
                   >
-                    {isToday && (
-                      <div className="absolute -top-1 left-1/2 z-10 -translate-x-1/2 rounded bg-black px-1 text-[8px] font-bold text-white">
-                        TODAY
-                      </div>
-                    )}
+
                     {milestone && (
                       <div
                         className={cn(
@@ -1101,11 +1144,11 @@ export function ProjectTimeline({ initialProject, onBack, onUpdateProject }: Pro
               return (
                 <div
                   key={task.id}
-                  className="grid border-b border-black/20 break-inside-avoid page-break-inside-avoid"
+                  className="grid border-b border-black/20 break-inside-avoid page-break-inside-avoid relative"
                   style={{ gridTemplateColumns: `250px repeat(${printDates.length}, minmax(30px, 1fr))` }}
                 >
                   {/* Task Name Cell */}
-                  <div className="flex items-center gap-2 border-r border-black/20 px-2 py-2">
+                  <div className="flex items-center gap-2 border-r border-black/20 px-2 py-2 bg-white relative z-10">
                     <div className={cn("h-3 w-3 rounded-full shrink-0 border border-black/20", taskColor.bg)} />
                     <span className="text-sm font-medium text-black truncate flex-1">{task.name}</span>
                     {deadlineStatus && (
@@ -1133,17 +1176,10 @@ export function ProjectTimeline({ initialProject, onBack, onUpdateProject }: Pro
                         className={cn(
                           "relative border-r border-black/20 py-2 overflow-hidden",
                           sunday ? "bg-gray-50" : "",
-                          isToday && "bg-gray-100",
-                          isHoliday && "bg-gray-100"
+                          isHoliday && "bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNCIgaGVpZ2h0PSI0IiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxwYXRoIGQ9Ik0xIDNMMyAxTTEgNUw1IDEiIHN0cm9rZT0iI2QxZDVEQiIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9zdmc+')] bg-repeat"
                         )}
                       >
-                        {isHoliday && (
-                          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
-                            <div className="text-[8px] font-bold text-gray-500 tracking-widest opacity-60">
-                              HOLIDAY
-                            </div>
-                          </div>
-                        )}
+
                         {isMarked && !isHoliday && (
                           <div
                             className={cn(
@@ -1195,164 +1231,192 @@ export function ProjectTimeline({ initialProject, onBack, onUpdateProject }: Pro
                 })}
               </div>
             )}
+
+            {/* Holiday Overlay - One big badge per holiday column */}
+            <div className="absolute inset-x-0 bottom-0 pointer-events-none z-20 grid"
+              style={{
+                top: '75px',
+                gridTemplateColumns: `250px repeat(${printDates.length}, minmax(30px, 1fr))`
+              }}>
+              <div /> {/* Skip task col */}
+              {printDates.map((date, index) => {
+                const isHoliday = project.holidays.includes(index)
+                return (
+                  <div key={index} className="h-full relative">
+                    {isHoliday && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="bg-white/90 border border-gray-400 px-3 py-1 rounded shadow-sm -rotate-90">
+                          <span className="text-[10px] font-bold text-gray-700 tracking-widest whitespace-nowrap block">HOLIDAY</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
           </div>
         </div>
       </div>
 
       {/* Milestones Legend */}
-      {project.milestones.length > 0 && (
-        <div className="mt-4 flex flex-wrap gap-2 print:mt-2">
-          {project.milestones
-            .sort((a, b) => a.day - b.day)
-            .map((milestone) => (
-              <div
-                key={milestone.id}
-                className={cn(
-                  "flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium text-white shadow-sm",
-                  getMilestoneColor(milestone.type)
-                )}
-              >
-                <span>{formatDate(addDays(project.startDate, milestone.day))}</span>
-                <span>-</span>
-                <span>{milestone.label}</span>
-                <button
-                  type="button"
-                  onClick={() => deleteMilestone(milestone.id)}
-                  className="ml-1 hover:opacity-70 print:hidden"
+      {
+        project.milestones.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2 print:mt-2">
+            {project.milestones
+              .sort((a, b) => a.day - b.day)
+              .map((milestone) => (
+                <div
+                  key={milestone.id}
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium text-white shadow-sm",
+                    getMilestoneColor(milestone.type)
+                  )}
                 >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
-        </div>
-      )}
+                  <span>{formatDate(addDays(project.startDate, milestone.day))}</span>
+                  <span>-</span>
+                  <span>{milestone.label}</span>
+                  <button
+                    type="button"
+                    onClick={() => deleteMilestone(milestone.id)}
+                    className="ml-1 hover:opacity-70 print:hidden"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+          </div>
+        )
+      }
 
       {/* Task Detail Panel */}
-      {selectedTask && (
-        <div className="mt-4 rounded-xl bg-card p-4 shadow-lg print:hidden">
-          {(() => {
-            const task = project.tasks.find((t) => t.id === selectedTask)
-            if (!task) return null
+      {
+        selectedTask && (
+          <div className="mt-4 rounded-xl bg-card p-4 shadow-lg print:hidden">
+            {(() => {
+              const task = project.tasks.find((t) => t.id === selectedTask)
+              if (!task) return null
 
-            const markedDaysCount = task.markedDays.length
-            const firstDay = markedDaysCount > 0 ? Math.min(...task.markedDays) : null
-            const lastDay = markedDaysCount > 0 ? Math.max(...task.markedDays) : null
-            const taskColor = getTaskColor(task.color)
-            const deadlineStatus = getDeadlineStatus(task)
+              const markedDaysCount = task.markedDays.length
+              const firstDay = markedDaysCount > 0 ? Math.min(...task.markedDays) : null
+              const lastDay = markedDaysCount > 0 ? Math.max(...task.markedDays) : null
+              const taskColor = getTaskColor(task.color)
+              const deadlineStatus = getDeadlineStatus(task)
 
-            return (
-              <div className="space-y-4">
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className={cn("h-4 w-4 rounded-full", taskColor.bg)} />
-                    {getStatusIcon(task.status)}
-                    <div>
-                      <h3 className="text-lg font-semibold text-foreground">{task.name}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {markedDaysCount > 0 ? (
-                          <>
-                            {formatDate(addDays(project.startDate, firstDay!))} -{" "}
-                            {formatDate(addDays(project.startDate, lastDay!))}
-                            <span className="ml-2">({markedDaysCount} days marked)</span>
-                          </>
-                        ) : (
-                          "Click on timeline cells to mark days for this task"
-                        )}
-                      </p>
-                      {deadlineStatus && (
-                        <p
-                          className={cn(
-                            "text-sm font-medium mt-1",
-                            deadlineStatus === "overdue" ? "text-red-500" : "text-amber-500"
+              return (
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className={cn("h-4 w-4 rounded-full", taskColor.bg)} />
+                      {getStatusIcon(task.status)}
+                      <div>
+                        <h3 className="text-lg font-semibold text-foreground">{task.name}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {markedDaysCount > 0 ? (
+                            <>
+                              {formatDate(addDays(project.startDate, firstDay!))} -{" "}
+                              {formatDate(addDays(project.startDate, lastDay!))}
+                              <span className="ml-2">({markedDaysCount} days marked)</span>
+                            </>
+                          ) : (
+                            "Click on timeline cells to mark days for this task"
                           )}
-                        >
-                          {deadlineStatus === "overdue" ? "Task is overdue!" : "Deadline approaching!"}
                         </p>
-                      )}
+                        {deadlineStatus && (
+                          <p
+                            className={cn(
+                              "text-sm font-medium mt-1",
+                              deadlineStatus === "overdue" ? "text-red-500" : "text-amber-500"
+                            )}
+                          >
+                            {deadlineStatus === "overdue" ? "Task is overdue!" : "Deadline approaching!"}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      <div className="flex flex-col items-center">
+                        <span className="text-xs text-muted-foreground">Days Marked</span>
+                        <span className="text-2xl font-bold text-foreground">{markedDaysCount}</span>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => updateTask(task.id, { markedDays: [], status: "upcoming" })}
+                          disabled={markedDaysCount === 0}
+                        >
+                          Clear Days
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => updateTask(task.id, { status: "completed" })}
+                          disabled={task.status === "completed"}
+                        >
+                          Mark Complete
+                        </Button>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4">
-                    <div className="flex flex-col items-center">
-                      <span className="text-xs text-muted-foreground">Days Marked</span>
-                      <span className="text-2xl font-bold text-foreground">{markedDaysCount}</span>
-                    </div>
+                  {/* Notes Section */}
+                  <div className="space-y-2 border-t border-border pt-4">
+                    <Label className="text-sm font-medium">Notes</Label>
+                    <Textarea
+                      placeholder="Add notes for this task..."
+                      value={task.notes}
+                      onChange={(e) => updateTask(task.id, { notes: e.target.value })}
+                      rows={3}
+                    />
+                  </div>
 
-                    <div className="flex gap-2">
+                  {/* Deadline Section */}
+                  <div className="flex items-center gap-4 border-t border-border pt-4">
+                    <Label className="text-sm font-medium">Deadline</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="bg-transparent">
+                          <Calendar className="mr-2 h-4 w-4" />
+                          {task.deadline !== undefined
+                            ? formatDate(addDays(project.startDate, task.deadline))
+                            : "Set deadline"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <CalendarComponent
+                          mode="single"
+                          selected={task.deadline !== undefined ? addDays(project.startDate, task.deadline) : undefined}
+                          onSelect={(date) => {
+                            if (date) {
+                              const dayIndex = Math.floor(
+                                (date.getTime() - project.startDate.getTime()) / (1000 * 60 * 60 * 24)
+                              )
+                              updateTask(task.id, { deadline: dayIndex })
+                            }
+                          }}
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    {task.deadline !== undefined && (
                       <Button
+                        variant="ghost"
                         size="sm"
-                        variant="outline"
-                        onClick={() => updateTask(task.id, { markedDays: [], status: "upcoming" })}
-                        disabled={markedDaysCount === 0}
+                        onClick={() => updateTask(task.id, { deadline: undefined })}
                       >
-                        Clear Days
+                        Clear
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => updateTask(task.id, { status: "completed" })}
-                        disabled={task.status === "completed"}
-                      >
-                        Mark Complete
-                      </Button>
-                    </div>
+                    )}
                   </div>
                 </div>
-
-                {/* Notes Section */}
-                <div className="space-y-2 border-t border-border pt-4">
-                  <Label className="text-sm font-medium">Notes</Label>
-                  <Textarea
-                    placeholder="Add notes for this task..."
-                    value={task.notes}
-                    onChange={(e) => updateTask(task.id, { notes: e.target.value })}
-                    rows={3}
-                  />
-                </div>
-
-                {/* Deadline Section */}
-                <div className="flex items-center gap-4 border-t border-border pt-4">
-                  <Label className="text-sm font-medium">Deadline</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className="bg-transparent">
-                        <Calendar className="mr-2 h-4 w-4" />
-                        {task.deadline !== undefined
-                          ? formatDate(addDays(project.startDate, task.deadline))
-                          : "Set deadline"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <CalendarComponent
-                        mode="single"
-                        selected={task.deadline !== undefined ? addDays(project.startDate, task.deadline) : undefined}
-                        onSelect={(date) => {
-                          if (date) {
-                            const dayIndex = Math.floor(
-                              (date.getTime() - project.startDate.getTime()) / (1000 * 60 * 60 * 24)
-                            )
-                            updateTask(task.id, { deadline: dayIndex })
-                          }
-                        }}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  {task.deadline !== undefined && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => updateTask(task.id, { deadline: undefined })}
-                    >
-                      Clear
-                    </Button>
-                  )}
-                </div>
-              </div>
-            )
-          })()}
-        </div>
-      )}
+              )
+            })()}
+          </div>
+        )
+      }
 
       {/* Edit Task Modal */}
       <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}>
@@ -1419,6 +1483,6 @@ export function ProjectTimeline({ initialProject, onBack, onUpdateProject }: Pro
           .show-on-print { display: none; }
         `}
       </style>
-    </div>
+    </div >
   )
 }

@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 
 // Generate JWT
 const generateToken = (id) => {
@@ -13,14 +14,14 @@ const generateToken = (id) => {
 // @access  Public
 const registerUser = async (req, res) => {
     try {
-        const { name, email, password } = req.body;
+        const { username, password, securityQuestion, securityAnswer } = req.body;
 
-        if (!name || !email || !password) {
+        if (!username || !password || !securityQuestion || !securityAnswer) {
             return res.status(400).json({ message: 'Please add all fields' });
         }
 
         // Check if user exists
-        const userExists = await User.findOne({ email });
+        const userExists = await User.findOne({ username });
 
         if (userExists) {
             return res.status(400).json({ message: 'User already exists' });
@@ -28,16 +29,16 @@ const registerUser = async (req, res) => {
 
         // Create user
         const user = await User.create({
-            name,
-            email,
+            username,
             password,
+            securityQuestion,
+            securityAnswer
         });
 
         if (user) {
             res.status(201).json({
                 _id: user.id,
-                name: user.name,
-                email: user.email,
+                username: user.username,
                 token: generateToken(user.id),
             });
         } else {
@@ -53,16 +54,15 @@ const registerUser = async (req, res) => {
 // @access  Public
 const loginUser = async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const { username, password } = req.body;
 
-        // Check for user email
-        const user = await User.findOne({ email });
+        // Check for user
+        const user = await User.findOne({ username });
 
         if (user && (await user.matchPassword(password))) {
             res.json({
                 _id: user.id,
-                name: user.name,
-                email: user.email,
+                username: user.username,
                 token: generateToken(user.id),
             });
         } else {
@@ -80,8 +80,73 @@ const getMe = async (req, res) => {
     res.status(200).json(req.user);
 };
 
+// @desc    Get security question
+// @route   GET /api/auth/security-question/:username
+// @access  Public
+const getSecurityQuestion = async (req, res) => {
+    try {
+        const user = await User.findOne({ username: req.params.username });
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        res.json({ securityQuestion: user.securityQuestion });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Verify security answer
+// @route   POST /api/auth/verify-answer
+// @access  Public
+const verifyAnswer = async (req, res) => {
+    try {
+        const { username, securityAnswer } = req.body;
+        const user = await User.findOne({ username });
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        if (user.securityAnswer === securityAnswer) {
+            res.json({ message: 'Answer correct' });
+        } else {
+            res.status(400).json({ message: 'Incorrect answer' });
+        }
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// @desc    Reset password
+// @route   POST /api/auth/reset-password
+// @access  Public
+const resetPassword = async (req, res) => {
+    try {
+        const { username, securityAnswer, newPassword } = req.body;
+        const user = await User.findOne({ username });
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        if (user.securityAnswer !== securityAnswer) {
+            return res.status(400).json({ message: 'Invalid security answer' });
+        }
+
+        user.password = newPassword; // Will be hashed by pre-save hook
+        await user.save();
+
+        res.json({ message: 'Password updated successfully' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 module.exports = {
     registerUser,
     loginUser,
     getMe,
+    getSecurityQuestion,
+    verifyAnswer,
+    resetPassword
 };

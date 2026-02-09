@@ -5,7 +5,10 @@ const Project = require('../models/Project');
 // @access  Private
 const getProjects = async (req, res) => {
     try {
-        const projects = await Project.find();
+        if (!req.user) {
+            return res.status(401).json({ message: 'User not authenticated' });
+        }
+        const projects = await Project.find({ user: req.user.id });
         res.status(200).json(projects);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -17,7 +20,10 @@ const getProjects = async (req, res) => {
 // @access  Private
 const createProject = async (req, res) => {
     try {
-        const project = await Project.create(req.body);
+        const project = await Project.create({
+            ...req.body,
+            user: req.user.id
+        });
         res.status(200).json(project);
     } catch (error) {
         res.status(500).json({ message: error.message });

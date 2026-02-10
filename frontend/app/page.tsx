@@ -45,6 +45,9 @@ export default function Page() {
       const formatted = data.map((p: any) => ({
         ...p,
         id: p._id,
+        name: p.name || "",
+        client: p.client || "",
+        scale: p.scale || "",
         startDate: new Date(p.startDate),
         tasks: p.tasks || [],
         milestones: p.milestones || [],

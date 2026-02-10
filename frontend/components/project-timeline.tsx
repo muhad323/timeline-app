@@ -409,9 +409,9 @@ export function ProjectTimeline({ initialProject, onBack, onUpdateProject }: Pro
 
   // Check if project is configured
   const isProjectConfigured =
-    project.name.trim() !== "" &&
-    project.client.trim() !== "" &&
-    project.scale.trim() !== ""
+    (project.name || "").trim() !== "" &&
+    (project.client || "").trim() !== "" &&
+    (project.scale || "").trim() !== ""
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-6 print:p-2 print:bg-white">

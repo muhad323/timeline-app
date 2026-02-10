@@ -3,20 +3,59 @@ const mongoose = require('mongoose');
 const projectSchema = new mongoose.Schema({
     name: {
         type: String,
-        required: true
+        required: true,
+        trim: true
     },
-    description: {
-        type: String
+    client: {
+        type: String,
+        required: true,
+        trim: true
     },
-    // Add other fields as necessary based on the frontend key use
-    createdAt: {
+    scale: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    startDate: {
         type: Date,
         default: Date.now
     },
+    status: {
+        type: String,
+        enum: ['active', 'completed', 'archived'],
+        default: 'active'
+    },
+    tasks: [{
+        id: String,
+        name: String,
+        status: {
+            type: String,
+            enum: ['completed', 'in-progress', 'upcoming'],
+            default: 'upcoming'
+        },
+        markedDays: [Number],
+        color: String,
+        notes: String,
+        deadline: Number
+    }],
+    milestones: [{
+        id: String,
+        label: String,
+        day: Number,
+        type: {
+            type: String,
+            enum: ['delivery', 'inspection', 'progress', 'completion']
+        }
+    }],
+    holidays: [Number],
     user: {
         type: mongoose.Schema.Types.ObjectId,
         required: true,
         ref: 'User'
+    },
+    createdAt: {
+        type: Date,
+        default: Date.now
     }
 });
 

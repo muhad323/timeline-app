@@ -20,6 +20,14 @@ const registerUser = async (req, res) => {
             return res.status(400).json({ message: 'Please add all fields' });
         }
 
+        // Validate password strength
+        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
+        if (!passwordRegex.test(password)) {
+            return res.status(400).json({
+                message: 'Password must be at least 8 characters and contain uppercase, lowercase, number, and special character'
+            });
+        }
+
         // Check if user exists
         const userExists = await User.findOne({ username });
 
@@ -59,14 +67,18 @@ const loginUser = async (req, res) => {
         // Check for user
         const user = await User.findOne({ username });
 
-        if (user && (await user.matchPassword(password))) {
+        if (!user) {
+            return res.status(400).json({ message: 'User not found' });
+        }
+
+        if (await user.matchPassword(password)) {
             res.json({
                 _id: user.id,
                 username: user.username,
                 token: generateToken(user.id),
             });
         } else {
-            res.status(401).json({ message: 'Invalid credentials' });
+            res.status(401).json({ message: 'Invalid password' });
         }
     } catch (error) {
         res.status(500).json({ message: error.message });
